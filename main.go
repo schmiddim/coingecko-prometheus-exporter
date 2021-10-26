@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	log "github.com/sirupsen/logrus"
 	coingecko "github.com/superoo7/go-gecko/v3"
+	"github.com/superoo7/go-gecko/v3/types"
 	"net/http"
 	"time"
 )
@@ -15,12 +17,10 @@ var CG = coingecko.NewClient(httpClient)
 
 func fetchForCoin(coinID string) {
 	coin, err := CG.CoinsID(coinID, true, true, true, true, true, true)
-	log.Debug(coinID, coin.MarketData.CurrentPrice["eur"])
+	log.Debugf("update %s %s", coinID, rConf.currency)
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	//cap24 market cap
 
 	rConf.currentPrice.WithLabelValues(coin.Symbol).Set(coin.MarketData.CurrentPrice[rConf.currency])
 	rConf.ath.WithLabelValues(coin.Symbol).Set(coin.MarketData.ATH[rConf.currency])
@@ -44,12 +44,25 @@ func main() {
 	setupWebserver()
 	setupGauges()
 
-	// Regular loop operations below
+	var baseURL = "https://api.coingecko.com/api/v3/coins"
+	resp, _ :=CG.MakeReq(baseURL)
+
+
+	//@todo PR into the library
+	var data *types.CoinList
+	err :=json.Unmarshal(resp, &data)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	ticker := time.NewTicker(rConf.updateInterval)
 	for {
 		log.Debug("> Updating....\n")
-		for _, item := range []string{"bitcoin"} {
-			fetchForCoin(item)
+		for _, item := range *data {
+		//for _, item := range []string{"bitcoin"} {
+
+			fetchForCoin(item.ID)
+			time.Sleep(time.Second *2 ) //@todo better api handling of api throttling
 		}
 		<-ticker.C
 	}

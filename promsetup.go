@@ -39,7 +39,7 @@ var rConf = runtimeConfStruct{
 	httpServerPort:            9101,
 	httpServ:                  nil,
 	registry:                  prometheus.NewRegistry(),
-	updateInterval:            5 * time.Second,
+	updateInterval:            50 * time.Second,
 	configFile:                "",
 	currency:                  "eur",
 	currentPrice:              nil,
