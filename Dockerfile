@@ -22,6 +22,8 @@ RUN go build -o /go/bin/main
 # STEP 2 build a small image
 ############################
 FROM scratch
+# Copy CA certificates to prevent x509: certificate signed by unknown authority errors
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 # Copy our static executable.
 COPY --from=builder /go/bin/main /go/bin/main
 # Run the hello binary.
