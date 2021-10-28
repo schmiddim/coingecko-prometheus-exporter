@@ -136,7 +136,7 @@ func setupWebserver() {
 		Handler: httpMux,
 	}
 	go func() {
-		log.Infof("> Starting HTTP server at %s\n", prometheusConfig.httpServ.Addr)
+		log.Infof("> Starting HTTP server at %s", prometheusConfig.httpServ.Addr)
 		err := prometheusConfig.httpServ.ListenAndServe()
 		if err != http.ErrServerClosed {
 			log.Errorf("HTTP Server errored out %v", err)

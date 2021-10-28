@@ -97,7 +97,7 @@ func exec() {
 
 	//ticker := time.NewTicker(rConf.updateInterval)
 	for {
-		log.Debug("> Updating....\n")
+		log.Debug("> Updating....")
 		for _, item := range *data {
 			//for _, item := range []string{"bitcoin"} {
 			fetchForCoin(item.ID)
