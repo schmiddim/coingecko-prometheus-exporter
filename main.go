@@ -15,15 +15,16 @@ var httpClient = &http.Client{
 }
 
 type runtimeConfStruct struct {
-	debug      bool
-	configFile string
-	currency   string
+	debug                bool
+	sleepAfterRequest    int
+	sleepAfterThrottling int
+	currency             string
 }
 
 var rConf = runtimeConfStruct{
-
-	configFile: "",
-	currency:   "eur",
+	sleepAfterThrottling: 15000,
+	sleepAfterRequest:    2500,
+	currency:             "eur",
 }
 
 var CG = coingecko.NewClient(httpClient)
@@ -33,13 +34,13 @@ func fetchForCoin(coinID string) {
 	log.Debugf("update %s %s", coinID, rConf.currency)
 	if err != nil || coin == nil {
 		log.Errorf("Loop: We're throttled by API, %s", err)
-		time.Sleep(time.Second * 10)
+		time.Sleep(time.Millisecond * time.Duration(rConf.sleepAfterThrottling))
 		fetchForCoin(coinID)
 
 	}
 	if coin == nil {
 		log.Errorf("WTF: %s Coin is nil, %s", coinID, coin)
-		time.Sleep(time.Second * 10)
+		time.Sleep(time.Second * 15)
 		fetchForCoin(coinID)
 
 	}
@@ -57,13 +58,15 @@ func fetchForCoin(coinID string) {
 	prometheusConfig.marketCap.WithLabelValues(coin.Symbol).Set(coin.MarketData.MarketCap[rConf.currency])
 	prometheusConfig.high24.WithLabelValues(coin.Symbol).Set(coin.MarketData.High24[rConf.currency])
 	prometheusConfig.low24.WithLabelValues(coin.Symbol).Set(coin.MarketData.Low24[rConf.currency])
-	time.Sleep(time.Millisecond * 2500) //@todo better api handling of api throttling
+	time.Sleep(time.Duration(rConf.sleepAfterRequest) * time.Millisecond) //@todo better api handling of api throttling
 }
 func initParams() {
 
 	flag.UintVar(&prometheusConfig.httpServerPort, "httpServerPort", prometheusConfig.httpServerPort, "HTTP server port.")
 	flag.BoolVar(&rConf.debug, "debug", false, "Set debug log level.")
-	flag.StringVar(&rConf.configFile, "currency", "eur", "currency")
+	flag.StringVar(&rConf.currency, "currency", "eur", "currency")
+	flag.IntVar(&rConf.sleepAfterRequest, "sleepAfterRequest", rConf.sleepAfterRequest, "Time in ms to wait after each coin request")
+	flag.IntVar(&rConf.sleepAfterThrottling, "sleepAfterRequest", rConf.sleepAfterThrottling, "Time in ms to wait after each coin request")
 
 	flag.Parse()
 
@@ -88,7 +91,7 @@ func exec() {
 	resp, err := CG.MakeReq(baseURL)
 
 	if err != nil {
-		sleepInterval := time.Second * 10
+		sleepInterval := time.Millisecond * time.Duration(rConf.sleepAfterThrottling)
 		log.Errorf("Init: We're throttled by API, %s  - wait %d", err, sleepInterval)
 		time.Sleep(sleepInterval)
 
