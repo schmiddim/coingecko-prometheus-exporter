@@ -32,8 +32,9 @@ func fetchForCoin(coinID string) {
 	coin, err := CG.CoinsID(coinID, true, true, true, true, true, true)
 	log.Debugf("update %s %s", coinID, rConf.currency)
 	if err != nil {
-		log.Errorf("We're throddled by API, %s", err)
+		log.Errorf("Loop: We're throttled by API, %s", err)
 		time.Sleep(time.Second * 10)
+		fetchForCoin(coinID)
 
 	}
 
@@ -82,7 +83,7 @@ func exec() {
 
 	if err != nil {
 		sleepInterval := time.Second * 10
-		log.Errorf("We're throddled by API, %s  - wait %d", err, sleepInterval)
+		log.Errorf("Init: We're throttled by API, %s  - wait %d", err, sleepInterval)
 		time.Sleep(sleepInterval)
 
 	}
