@@ -37,7 +37,13 @@ func fetchForCoin(coinID string) {
 		fetchForCoin(coinID)
 
 	}
+	if coin == nil {
+		log.Errorf("Loop: %s Coin is nil, %s",coinID, coin)
+		time.Sleep(time.Second * 10)
+		fetchForCoin(coinID)
 
+
+	}
 	prometheusConfig.currentPrice.WithLabelValues(coin.Symbol).Set(coin.MarketData.CurrentPrice[rConf.currency])
 	prometheusConfig.ath.WithLabelValues(coin.Symbol).Set(coin.MarketData.ATH[rConf.currency])
 	prometheusConfig.athRelative.WithLabelValues(coin.Symbol).Set(coin.MarketData.ATHChangePercentage[rConf.currency])
