@@ -15,18 +15,12 @@ var httpClient = &http.Client{
 }
 
 type runtimeConfStruct struct {
-	httpServerPort uint
-	httpServ       *http.Server
-
 	debug      bool
 	configFile string
 	currency   string
 }
 
 var rConf = runtimeConfStruct{
-
-	httpServerPort: 9101,
-	httpServ:       nil,
 
 	configFile: "",
 	currency:   "eur",
@@ -60,7 +54,7 @@ func fetchForCoin(coinID string) {
 }
 func initParams() {
 
-	flag.UintVar(&rConf.httpServerPort, "httpServerPort", rConf.httpServerPort, "HTTP server port.")
+	flag.UintVar(&prometheusConfig.httpServerPort, "httpServerPort", prometheusConfig.httpServerPort, "HTTP server port.")
 	flag.BoolVar(&rConf.debug, "debug", false, "Set debug log level.")
 	flag.StringVar(&rConf.configFile, "currency", "eur", "currency")
 
