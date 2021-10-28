@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	log "github.com/sirupsen/logrus"
 	coingecko "github.com/superoo7/go-gecko/v3"
 	"github.com/superoo7/go-gecko/v3/types"
+	"golang.org/x/time/rate"
 	"net/http"
 	"time"
 )
@@ -16,31 +18,35 @@ var httpClient = &http.Client{
 
 type runtimeConfStruct struct {
 	debug                bool
-	sleepAfterRequest    int
+	requestsPerMinute    int
 	sleepAfterThrottling int
 	currency             string
 }
 
 var rConf = runtimeConfStruct{
+	debug:                true,
 	sleepAfterThrottling: 15000,
-	sleepAfterRequest:    2500,
 	currency:             "eur",
+	requestsPerMinute:    49,
 }
 
 var CG = coingecko.NewClient(httpClient)
 
 func fetchForCoin(coinID string) {
+
 	coin, err := CG.CoinsID(coinID, true, true, true, false, false, true)
 	log.Debugf("update %s %s", coinID, rConf.currency)
 	if err != nil || coin == nil {
 		log.Errorf("Loop: We're throttled by API, %s", err)
 		time.Sleep(time.Millisecond * time.Duration(rConf.sleepAfterThrottling))
+		return
 		fetchForCoin(coinID)
 
 	}
 	if coin == nil {
 		log.Errorf("WTF: %s Coin is nil, %s", coinID, coin)
 		time.Sleep(time.Second * 15)
+		return
 		fetchForCoin(coinID)
 
 	}
@@ -58,16 +64,15 @@ func fetchForCoin(coinID string) {
 	prometheusConfig.marketCap.WithLabelValues(coin.Symbol).Set(coin.MarketData.MarketCap[rConf.currency])
 	prometheusConfig.high24.WithLabelValues(coin.Symbol).Set(coin.MarketData.High24[rConf.currency])
 	prometheusConfig.low24.WithLabelValues(coin.Symbol).Set(coin.MarketData.Low24[rConf.currency])
-	time.Sleep(time.Duration(rConf.sleepAfterRequest) * time.Millisecond) //@todo better api handling of api throttling
+	//time.Sleep(time.Duration(rConf.sleepAfterRequest) * time.Millisecond) //@todo better api handling of api throttling
 }
 func initParams() {
 
 	flag.UintVar(&prometheusConfig.httpServerPort, "httpServerPort", prometheusConfig.httpServerPort, "HTTP server port.")
-	flag.BoolVar(&rConf.debug, "debug", false, "Set debug log level.")
+	flag.BoolVar(&rConf.debug, "debug", rConf.debug, "Set debug log level.")
 	flag.StringVar(&rConf.currency, "currency", "eur", "currency")
-	flag.IntVar(&rConf.sleepAfterRequest, "sleepAfterRequest", rConf.sleepAfterRequest, "Time in ms to wait after each coin request")
+	flag.IntVar(&rConf.requestsPerMinute, "requestsPerMinute", rConf.requestsPerMinute, "how many requestsPerMinute ")
 	flag.IntVar(&rConf.sleepAfterThrottling, "sleepAfterRequest", rConf.sleepAfterThrottling, "Time in ms to wait after each coin request")
-
 	flag.Parse()
 
 	logLvl := log.InfoLevel
@@ -104,10 +109,18 @@ func exec() {
 		exec()
 	}
 
+
+	n := rate.Every(time.Minute / time.Duration(rConf.requestsPerMinute))
+	limiter := rate.NewLimiter(n, 1)
+	ctx := context.Background()
 	for {
 		log.Debug("> Updating....")
 		for _, item := range *data {
+			if err := limiter.Wait(ctx); err != nil {
+				log.Fatalln(err)
+			}
 			fetchForCoin(item.ID)
+
 		}
 	}
 }
