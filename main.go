@@ -39,14 +39,14 @@ func fetchForCoin(coinID string) {
 	if err != nil || coin == nil {
 		log.Errorf("Loop: We're throttled by API, %s", err)
 		time.Sleep(time.Millisecond * time.Duration(rConf.sleepAfterThrottling))
-		return
+		coin, err =nil, nil 
 		fetchForCoin(coinID)
 
 	}
 	if coin == nil {
 		log.Errorf("WTF: %s Coin is nil, %s", coinID, coin)
 		time.Sleep(time.Second * 15)
-		return
+		coin, err =nil, nil 
 		fetchForCoin(coinID)
 
 	}
@@ -108,7 +108,6 @@ func exec() {
 		log.Fatal(err)
 		exec()
 	}
-
 
 	n := rate.Every(time.Minute / time.Duration(rConf.requestsPerMinute))
 	limiter := rate.NewLimiter(n, 1)
