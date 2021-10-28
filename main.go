@@ -29,21 +29,21 @@ var rConf = runtimeConfStruct{
 var CG = coingecko.NewClient(httpClient)
 
 func fetchForCoin(coinID string) {
-	coin, err := CG.CoinsID(coinID, true, true, true, true, true, true)
+	coin, err := CG.CoinsID(coinID, true, true, true, false, false, true)
 	log.Debugf("update %s %s", coinID, rConf.currency)
-	if err != nil {
+	if err != nil || coin == nil {
 		log.Errorf("Loop: We're throttled by API, %s", err)
 		time.Sleep(time.Second * 10)
 		fetchForCoin(coinID)
 
 	}
 	if coin == nil {
-		log.Errorf("Loop: %s Coin is nil, %s",coinID, coin)
+		log.Errorf("WTF: %s Coin is nil, %s", coinID, coin)
 		time.Sleep(time.Second * 10)
 		fetchForCoin(coinID)
 
-
 	}
+
 	prometheusConfig.currentPrice.WithLabelValues(coin.Symbol).Set(coin.MarketData.CurrentPrice[rConf.currency])
 	prometheusConfig.ath.WithLabelValues(coin.Symbol).Set(coin.MarketData.ATH[rConf.currency])
 	prometheusConfig.athRelative.WithLabelValues(coin.Symbol).Set(coin.MarketData.ATHChangePercentage[rConf.currency])
@@ -57,7 +57,7 @@ func fetchForCoin(coinID string) {
 	prometheusConfig.marketCap.WithLabelValues(coin.Symbol).Set(coin.MarketData.MarketCap[rConf.currency])
 	prometheusConfig.high24.WithLabelValues(coin.Symbol).Set(coin.MarketData.High24[rConf.currency])
 	prometheusConfig.low24.WithLabelValues(coin.Symbol).Set(coin.MarketData.Low24[rConf.currency])
-	time.Sleep(time.Second * 2) //@todo better api handling of api throttling
+	time.Sleep(time.Millisecond * 2500) //@todo better api handling of api throttling
 }
 func initParams() {
 
@@ -101,14 +101,10 @@ func exec() {
 		exec()
 	}
 
-	//ticker := time.NewTicker(rConf.updateInterval)
 	for {
 		log.Debug("> Updating....")
 		for _, item := range *data {
-			//for _, item := range []string{"bitcoin"} {
 			fetchForCoin(item.ID)
-
 		}
-
 	}
 }
