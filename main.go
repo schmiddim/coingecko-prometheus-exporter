@@ -39,16 +39,9 @@ func fetchForCoin(coinID string) {
 	if err != nil || coin == nil {
 		log.Errorf("Loop: We're throttled by API, %s", err)
 		time.Sleep(time.Millisecond * time.Duration(rConf.sleepAfterThrottling))
-		coin, err =nil, nil 
+		coin, err = nil, nil
 		fetchForCoin(coinID)
-
-	}
-	if coin == nil {
-		log.Errorf("WTF: %s Coin is nil, %s", coinID, coin)
-		time.Sleep(time.Second * 15)
-		coin, err =nil, nil 
-		fetchForCoin(coinID)
-
+		return
 	}
 
 	prometheusConfig.currentPrice.WithLabelValues(coin.Symbol).Set(coin.MarketData.CurrentPrice[rConf.currency])
@@ -64,8 +57,9 @@ func fetchForCoin(coinID string) {
 	prometheusConfig.marketCap.WithLabelValues(coin.Symbol).Set(coin.MarketData.MarketCap[rConf.currency])
 	prometheusConfig.high24.WithLabelValues(coin.Symbol).Set(coin.MarketData.High24[rConf.currency])
 	prometheusConfig.low24.WithLabelValues(coin.Symbol).Set(coin.MarketData.Low24[rConf.currency])
-	//time.Sleep(time.Duration(rConf.sleepAfterRequest) * time.Millisecond) //@todo better api handling of api throttling
+
 }
+
 func initParams() {
 
 	flag.UintVar(&prometheusConfig.httpServerPort, "httpServerPort", prometheusConfig.httpServerPort, "HTTP server port.")
