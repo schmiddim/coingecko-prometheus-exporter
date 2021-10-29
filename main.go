@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
+	"fmt"
 	log "github.com/sirupsen/logrus"
 	coingecko "github.com/superoo7/go-gecko/v3"
 	"github.com/superoo7/go-gecko/v3/types"
@@ -82,6 +83,10 @@ func main() {
 	setupWebserver()
 	setupGauges()
 
+	fmt.Printf("debug mode %t\n", rConf.debug)
+	fmt.Printf("currency %s\n", rConf.currency)
+	fmt.Printf("requestsPerMinute %d\n", rConf.requestsPerMinute)
+	fmt.Printf("sleepAfterThrottling %d\n", rConf.sleepAfterThrottling)
 	exec()
 
 }
@@ -93,14 +98,17 @@ func exec() {
 		sleepInterval := time.Millisecond * time.Duration(rConf.sleepAfterThrottling)
 		log.Errorf("Init: We're throttled by API, %s  - wait %d", err, sleepInterval)
 		time.Sleep(sleepInterval)
+		exec()
+		return
 
 	}
 	//@todo PR into the library
 	var data *types.CoinList
 	err = json.Unmarshal(resp, &data)
 	if err != nil {
-		log.Fatal(err)
+		log.Error(err)
 		exec()
+		return
 	}
 
 	n := rate.Every(time.Minute / time.Duration(rConf.requestsPerMinute))
