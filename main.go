@@ -9,15 +9,12 @@ import (
 	"github.com/opentracing/opentracing-go/ext"
 	tracingLog "github.com/opentracing/opentracing-go/log"
 	log "github.com/sirupsen/logrus"
-	coingecko "github.com/superoo7/go-gecko/v3"
+	coinGecko "github.com/superoo7/go-gecko/v3"
 	"github.com/superoo7/go-gecko/v3/types"
-	"github.com/uber/jaeger-client-go"
-	jaegerCfg "github.com/uber/jaeger-client-go/config"
-	jaegerLog "github.com/uber/jaeger-client-go/log"
-	"github.com/uber/jaeger-lib/metrics"
 	"golang.org/x/time/rate"
-	"io"
 	"net/http"
+	"sort"
+	"strings"
 	"time"
 )
 
@@ -30,6 +27,7 @@ type runtimeConfStruct struct {
 	requestsPerMinute    int
 	sleepAfterThrottling int
 	currency             string
+	additionalCoins      []string
 }
 
 var rConf = runtimeConfStruct{
@@ -39,45 +37,14 @@ var rConf = runtimeConfStruct{
 	requestsPerMinute:    49,
 }
 
-var CG = coingecko.NewClient(httpClient)
+var CG = coinGecko.NewClient(httpClient)
 
 func main() {
-	// Jaeger Tracing Tutorial https://github.com/yurishkuro/opentracing-tutorial/tree/master/go/lesson03
-	cfg := jaegerCfg.Configuration{
-		ServiceName: "coingecko-exporter",
-		Sampler: &jaegerCfg.SamplerConfig{
-			Type:  jaeger.SamplerTypeConst,
-			Param: 1,
-		},
-		Reporter: &jaegerCfg.ReporterConfig{
-			LogSpans: true,
-		},
-	}
-	jMetricsFactory := metrics.NullFactory
-	// Initialize tracer with a logger and a metrics factory
-	tracer, closer, err := cfg.NewTracer(
-		jaegerCfg.Logger(jaegerLog.NullLogger),
-		jaegerCfg.Metrics(jMetricsFactory),
-	)
-	if err != nil {
-		log.Fatal("fuck ", err)
-	}
-	// Set the singleton opentracing.Tracer with the Jaeger tracer.
-	opentracing.SetGlobalTracer(tracer)
-	defer func(closer io.Closer) {
-		err := closer.Close()
-		if err != nil {
-			log.Fatal("Jaeger", err )
-		}
-	}(closer)
-	span := tracer.StartSpan("main")
-	defer span.Finish()
-	ctx := opentracing.ContextWithSpan(context.Background(), span)
 
+	ctx := initTracing()
 	initParams(ctx)
 	setupWebserver(ctx)
 	setupGauges(ctx)
-
 
 	fmt.Printf("debug mode %t\n", rConf.debug)
 	fmt.Printf("currency %s\n", rConf.currency)
@@ -86,18 +53,25 @@ func main() {
 	exec(ctx)
 
 }
+func contains(s []string, searchTerm string) bool {
+	i := sort.SearchStrings(s, searchTerm)
+	return i < len(s) && s[i] == searchTerm
+}
 
 func initParams(ctx context.Context) {
 	span, _ := opentracing.StartSpanFromContext(ctx, "initParams")
 	defer span.Finish()
+	additionalCoinsString := "foo"
 
 	flag.UintVar(&prometheusConfig.httpServerPort, "httpServerPort", prometheusConfig.httpServerPort, "HTTP server port.")
 	flag.BoolVar(&rConf.debug, "debug", rConf.debug, "Set debug log level.")
 	flag.StringVar(&rConf.currency, "currency", "eur", "currency")
 	flag.IntVar(&rConf.requestsPerMinute, "requestsPerMinute", rConf.requestsPerMinute, "how many requestsPerMinute ")
 	flag.IntVar(&rConf.sleepAfterThrottling, "sleepAfterRequest", rConf.sleepAfterThrottling, "Time in ms to wait after each coin request")
+	flag.StringVar(&additionalCoinsString, "additionalCoins", "", "pass additional coins coma separated")
 	flag.Parse()
 
+	rConf.additionalCoins = strings.Split(additionalCoinsString, ",")
 	logLvl := log.InfoLevel
 	if rConf.debug {
 		logLvl = log.DebugLevel
@@ -132,16 +106,28 @@ func exec(ctx context.Context) {
 		return
 	}
 
+	var symbols []string
+	log.Debug("Updating....")
+	for _, item := range *data {
+		symbols = append(symbols, item.ID)
+	}
+	sort.Strings(symbols)
+	for _, item := range rConf.additionalCoins {
+		if !contains(symbols, item) {
+			symbols = append(symbols, item)
+		}
+	}
+
 	n := rate.Every(time.Minute / time.Duration(rConf.requestsPerMinute))
 	limiter := rate.NewLimiter(n, 1)
 	ctxBackground := context.Background()
 	for {
 		log.Debug("> Updating....")
-		for _, item := range *data {
+		for _, item := range symbols {
 			if err := limiter.Wait(ctxBackground); err != nil {
 				log.Fatalln(err)
 			}
-			fetchForCoin(ctx, item.ID)
+			fetchForCoin(ctx, item)
 
 		}
 	}
