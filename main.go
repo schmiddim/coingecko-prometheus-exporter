@@ -143,6 +143,9 @@ func fetchForCoin(ctx context.Context, coinID string) {
 	coin, err := CG.CoinsID(coinID, true, true, true, false, false, true)
 	log.Debugf("update %s %s", coinID, rConf.currency)
 	if err != nil || coin == nil {
+		if err.Error() == "{\"error\":\"Could not find coin with the given id\"}" {
+			log.Fatalf("coinID '%s' not found - please pass only Coingecko IDs and not Symbols", coinID)
+		}
 		ext.LogError(span, err)
 		log.Errorf("Loop: We're throttled by API, %s", err)
 		time.Sleep(time.Millisecond * time.Duration(rConf.sleepAfterThrottling))
