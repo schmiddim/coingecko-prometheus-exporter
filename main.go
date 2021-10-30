@@ -5,10 +5,15 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/opentracing/opentracing-go"
+	"github.com/opentracing/opentracing-go/ext"
+	tracinglog "github.com/opentracing/opentracing-go/log"
 	log "github.com/sirupsen/logrus"
 	coingecko "github.com/superoo7/go-gecko/v3"
 	"github.com/superoo7/go-gecko/v3/types"
+	"github.com/yurishkuro/opentracing-tutorial/go/lib/tracing"
 	"golang.org/x/time/rate"
+	"io"
 	"net/http"
 	"time"
 )
@@ -33,15 +38,113 @@ var rConf = runtimeConfStruct{
 
 var CG = coingecko.NewClient(httpClient)
 
-func fetchForCoin(coinID string) {
+func main() {
+	// Jaeger Tracing Tutorial https://github.com/yurishkuro/opentracing-tutorial/tree/master/go/lesson03
+	tracer, closer := tracing.Init("coingecko-exporter")
+	defer func(closer io.Closer) {
+		err := closer.Close()
+		if err != nil {
+			log.Fatalln("tracing init broken", err)
+		}
+	}(closer)
+	opentracing.SetGlobalTracer(tracer)
+	span := tracer.StartSpan("main")
+	defer span.Finish()
+
+	ctx := opentracing.ContextWithSpan(context.Background(), span)
+
+	initParams(ctx)
+	setupWebserver(ctx)
+	setupGauges(ctx)
+
+	span.LogFields(
+		tracinglog.String("currency", rConf.currency),
+		tracinglog.Int("requestsPerMinute", rConf.requestsPerMinute),
+		tracinglog.Int("sleepAfterThrottling", rConf.sleepAfterThrottling),
+	)
+	fmt.Printf("debug mode %t\n", rConf.debug)
+	fmt.Printf("currency %s\n", rConf.currency)
+	fmt.Printf("requestsPerMinute %d\n", rConf.requestsPerMinute)
+	fmt.Printf("sleepAfterThrottling %d\n", rConf.sleepAfterThrottling)
+	exec(ctx)
+
+}
+
+func initParams(ctx context.Context) {
+	span, _ := opentracing.StartSpanFromContext(ctx, "initParams")
+	defer span.Finish()
+
+	flag.UintVar(&prometheusConfig.httpServerPort, "httpServerPort", prometheusConfig.httpServerPort, "HTTP server port.")
+	flag.BoolVar(&rConf.debug, "debug", rConf.debug, "Set debug log level.")
+	flag.StringVar(&rConf.currency, "currency", "eur", "currency")
+	flag.IntVar(&rConf.requestsPerMinute, "requestsPerMinute", rConf.requestsPerMinute, "how many requestsPerMinute ")
+	flag.IntVar(&rConf.sleepAfterThrottling, "sleepAfterRequest", rConf.sleepAfterThrottling, "Time in ms to wait after each coin request")
+	flag.Parse()
+
+	logLvl := log.InfoLevel
+	if rConf.debug {
+		logLvl = log.DebugLevel
+	}
+	log.SetLevel(logLvl)
+
+}
+
+func exec(ctx context.Context) {
+	span, _ := opentracing.StartSpanFromContext(ctx, "exec")
+	defer span.Finish()
+
+	var baseURL = "https://api.coingecko.com/api/v3/coins"
+	resp, err := CG.MakeReq(baseURL)
+
+	if err != nil {
+		sleepInterval := time.Millisecond * time.Duration(rConf.sleepAfterThrottling)
+		log.Errorf("Init: We're throttled by API, %s  - wait %d", err, sleepInterval)
+		ext.LogError(span, err)
+		time.Sleep(sleepInterval)
+		exec(ctx)
+		return
+
+	}
+	//@todo PR into the library
+	var data *types.CoinList
+	err = json.Unmarshal(resp, &data)
+	if err != nil {
+		ext.LogError(span, err)
+		log.Error(err)
+		exec(ctx)
+		return
+	}
+
+	n := rate.Every(time.Minute / time.Duration(rConf.requestsPerMinute))
+	limiter := rate.NewLimiter(n, 1)
+	ctxBackground := context.Background()
+	for {
+		log.Debug("> Updating....")
+		for _, item := range *data {
+			if err := limiter.Wait(ctxBackground); err != nil {
+				log.Fatalln(err)
+			}
+			fetchForCoin(ctx, item.ID)
+
+		}
+	}
+}
+func fetchForCoin(ctx context.Context, coinID string) {
+	span, _ := opentracing.StartSpanFromContext(ctx, "fetchForCoin")
+	defer span.Finish()
+	span.SetTag("coinID", coinID)
+	span.LogFields(
+		tracinglog.String("coinID", coinID),
+	)
 
 	coin, err := CG.CoinsID(coinID, true, true, true, false, false, true)
 	log.Debugf("update %s %s", coinID, rConf.currency)
 	if err != nil || coin == nil {
+		ext.LogError(span, err)
 		log.Errorf("Loop: We're throttled by API, %s", err)
 		time.Sleep(time.Millisecond * time.Duration(rConf.sleepAfterThrottling))
 		coin, err = nil, nil
-		fetchForCoin(coinID)
+		fetchForCoin(ctx, coinID)
 		return
 	}
 
@@ -59,69 +162,4 @@ func fetchForCoin(coinID string) {
 	prometheusConfig.high24.WithLabelValues(coin.Symbol).Set(coin.MarketData.High24[rConf.currency])
 	prometheusConfig.low24.WithLabelValues(coin.Symbol).Set(coin.MarketData.Low24[rConf.currency])
 
-}
-
-func initParams() {
-
-	flag.UintVar(&prometheusConfig.httpServerPort, "httpServerPort", prometheusConfig.httpServerPort, "HTTP server port.")
-	flag.BoolVar(&rConf.debug, "debug", rConf.debug, "Set debug log level.")
-	flag.StringVar(&rConf.currency, "currency", "eur", "currency")
-	flag.IntVar(&rConf.requestsPerMinute, "requestsPerMinute", rConf.requestsPerMinute, "how many requestsPerMinute ")
-	flag.IntVar(&rConf.sleepAfterThrottling, "sleepAfterRequest", rConf.sleepAfterThrottling, "Time in ms to wait after each coin request")
-	flag.Parse()
-
-	logLvl := log.InfoLevel
-	if rConf.debug {
-		logLvl = log.DebugLevel
-	}
-	log.SetLevel(logLvl)
-
-}
-func main() {
-
-	initParams()
-	setupWebserver()
-	setupGauges()
-
-	fmt.Printf("debug mode %t\n", rConf.debug)
-	fmt.Printf("currency %s\n", rConf.currency)
-	fmt.Printf("requestsPerMinute %d\n", rConf.requestsPerMinute)
-	fmt.Printf("sleepAfterThrottling %d\n", rConf.sleepAfterThrottling)
-	exec()
-
-}
-func exec() {
-	var baseURL = "https://api.coingecko.com/api/v3/coins"
-	resp, err := CG.MakeReq(baseURL)
-
-	if err != nil {
-		sleepInterval := time.Millisecond * time.Duration(rConf.sleepAfterThrottling)
-		log.Errorf("Init: We're throttled by API, %s  - wait %d", err, sleepInterval)
-		time.Sleep(sleepInterval)
-		exec()
-		return
-
-	}
-	//@todo PR into the library
-	var data *types.CoinList
-	err = json.Unmarshal(resp, &data)
-	if err != nil {
-		log.Error(err)
-		exec()
-		return
-	}
-
-	n := rate.Every(time.Minute / time.Duration(rConf.requestsPerMinute))
-	limiter := rate.NewLimiter(n, 1)
-	ctx := context.Background()
-	for {
-		log.Debug("> Updating....")
-		for _, item := range *data {
-			if err := limiter.Wait(ctx); err != nil {
-				log.Fatalln(err)
-			}
-			fetchForCoin(item.ID)
-
-		}
-	}
 }

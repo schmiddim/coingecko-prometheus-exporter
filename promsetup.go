@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"github.com/opentracing/opentracing-go"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
@@ -50,7 +52,9 @@ var prometheusConfig = prometheusConfigStruct{
 	registry:                  prometheus.NewRegistry(),
 }
 
-func setupGauges() {
+func setupGauges(ctx context.Context) {
+	span, _ := opentracing.StartSpanFromContext(ctx, "setupGauges")
+	defer span.Finish()
 
 	// Init Prometheus Gauge Vectors
 	prometheusConfig.currentPrice = prometheus.NewGaugeVec(prometheus.GaugeOpts{
@@ -122,7 +126,10 @@ func setupGauges() {
 	prometheusConfig.registry.MustRegister(prometheusConfig.low24)
 }
 
-func setupWebserver() {
+func setupWebserver(ctx context.Context) {
+	span, _ := opentracing.StartSpanFromContext(ctx, "setupWebserver")
+	defer span.Finish()
+
 	// Register prom metrics path in http serv
 	httpMux := http.NewServeMux()
 	httpMux.Handle("/metrics", promhttp.InstrumentMetricHandler(
