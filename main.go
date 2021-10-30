@@ -113,8 +113,8 @@ func exec(ctx context.Context) {
 	}
 	sort.Strings(symbols)
 	for _, item := range rConf.additionalCoins {
-		if !contains(symbols, item) {
-			symbols = append(symbols, item)
+		if !contains(symbols, strings.TrimSpace(item)) {
+			symbols = append(symbols, strings.TrimSpace(item))
 		}
 	}
 
