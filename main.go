@@ -7,11 +7,14 @@ import (
 	"fmt"
 	"github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/ext"
-	tracinglog "github.com/opentracing/opentracing-go/log"
+	tracingLog "github.com/opentracing/opentracing-go/log"
 	log "github.com/sirupsen/logrus"
 	coingecko "github.com/superoo7/go-gecko/v3"
 	"github.com/superoo7/go-gecko/v3/types"
-	"github.com/yurishkuro/opentracing-tutorial/go/lib/tracing"
+	"github.com/uber/jaeger-client-go"
+	jaegerCfg "github.com/uber/jaeger-client-go/config"
+	jaegerLog "github.com/uber/jaeger-client-go/log"
+	"github.com/uber/jaeger-lib/metrics"
 	"golang.org/x/time/rate"
 	"io"
 	"net/http"
@@ -40,28 +43,42 @@ var CG = coingecko.NewClient(httpClient)
 
 func main() {
 	// Jaeger Tracing Tutorial https://github.com/yurishkuro/opentracing-tutorial/tree/master/go/lesson03
-	tracer, closer := tracing.Init("coingecko-exporter")
+	cfg := jaegerCfg.Configuration{
+		ServiceName: "coingecko-exporter",
+		Sampler: &jaegerCfg.SamplerConfig{
+			Type:  jaeger.SamplerTypeConst,
+			Param: 1,
+		},
+		Reporter: &jaegerCfg.ReporterConfig{
+			LogSpans: true,
+		},
+	}
+	jMetricsFactory := metrics.NullFactory
+	// Initialize tracer with a logger and a metrics factory
+	tracer, closer, err := cfg.NewTracer(
+		jaegerCfg.Logger(jaegerLog.NullLogger),
+		jaegerCfg.Metrics(jMetricsFactory),
+	)
+	if err != nil {
+		log.Fatal("fuck ", err)
+	}
+	// Set the singleton opentracing.Tracer with the Jaeger tracer.
+	opentracing.SetGlobalTracer(tracer)
 	defer func(closer io.Closer) {
 		err := closer.Close()
 		if err != nil {
-			log.Fatalln("tracing init broken", err)
+			log.Fatal("Jaeger", err )
 		}
 	}(closer)
-	opentracing.SetGlobalTracer(tracer)
 	span := tracer.StartSpan("main")
 	defer span.Finish()
-
 	ctx := opentracing.ContextWithSpan(context.Background(), span)
 
 	initParams(ctx)
 	setupWebserver(ctx)
 	setupGauges(ctx)
 
-	span.LogFields(
-		tracinglog.String("currency", rConf.currency),
-		tracinglog.Int("requestsPerMinute", rConf.requestsPerMinute),
-		tracinglog.Int("sleepAfterThrottling", rConf.sleepAfterThrottling),
-	)
+
 	fmt.Printf("debug mode %t\n", rConf.debug)
 	fmt.Printf("currency %s\n", rConf.currency)
 	fmt.Printf("requestsPerMinute %d\n", rConf.requestsPerMinute)
@@ -134,7 +151,7 @@ func fetchForCoin(ctx context.Context, coinID string) {
 	defer span.Finish()
 	span.SetTag("coinID", coinID)
 	span.LogFields(
-		tracinglog.String("coinID", coinID),
+		tracingLog.String("coinID", coinID),
 	)
 
 	coin, err := CG.CoinsID(coinID, true, true, true, false, false, true)
