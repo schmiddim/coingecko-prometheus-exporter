@@ -154,19 +154,19 @@ func fetchForCoin(ctx context.Context, coinID string) {
 		return
 	}
 
-	prometheusConfig.currentPrice.WithLabelValues(coin.Symbol).Set(coin.MarketData.CurrentPrice[rConf.currency])
-	prometheusConfig.ath.WithLabelValues(coin.Symbol).Set(coin.MarketData.ATH[rConf.currency])
-	prometheusConfig.athRelative.WithLabelValues(coin.Symbol).Set(coin.MarketData.ATHChangePercentage[rConf.currency])
-	prometheusConfig.change1h.WithLabelValues(coin.Symbol).Set(coin.MarketData.PriceChangePercentage1hInCurrency[rConf.currency])
-	prometheusConfig.change24h.WithLabelValues(coin.Symbol).Set(coin.MarketData.PriceChangePercentage24h)
-	prometheusConfig.change7d.WithLabelValues(coin.Symbol).Set(coin.MarketData.PriceChangePercentage7d)
-	prometheusConfig.change14d.WithLabelValues(coin.Symbol).Set(coin.MarketData.PriceChangePercentage14d)
-	prometheusConfig.change30d.WithLabelValues(coin.Symbol).Set(coin.MarketData.PriceChangePercentage30d)
-	prometheusConfig.change60d.WithLabelValues(coin.Symbol).Set(coin.MarketData.PriceChangePercentage60d)
-	prometheusConfig.change200d.WithLabelValues(coin.Symbol).Set(coin.MarketData.PriceChangePercentage200d)
-	prometheusConfig.marketCapChange24Relative.WithLabelValues(coin.Symbol).Set(coin.MarketData.MarketCapChangePercentage24h)
-	prometheusConfig.marketCap.WithLabelValues(coin.Symbol).Set(coin.MarketData.MarketCap[rConf.currency])
-	prometheusConfig.high24.WithLabelValues(coin.Symbol).Set(coin.MarketData.High24[rConf.currency])
-	prometheusConfig.low24.WithLabelValues(coin.Symbol).Set(coin.MarketData.Low24[rConf.currency])
+	prometheusConfig.gaugeVectors["currentPrice"].WithLabelValues(coin.Symbol).Set(coin.MarketData.CurrentPrice[rConf.currency])
+	prometheusConfig.gaugeVectors["ath"].WithLabelValues(coin.Symbol).Set(coin.MarketData.ATH[rConf.currency])
+	prometheusConfig.gaugeVectors["athRelative"].WithLabelValues(coin.Symbol).Set(coin.MarketData.ATHChangePercentage[rConf.currency])
+	prometheusConfig.gaugeVectors["change1h"].WithLabelValues(coin.Symbol).Set(coin.MarketData.PriceChangePercentage1hInCurrency[rConf.currency])
+	prometheusConfig.gaugeVectors["change24h"].WithLabelValues(coin.Symbol).Set(coin.MarketData.PriceChangePercentage24h)
+	prometheusConfig.gaugeVectors["change7d"].WithLabelValues(coin.Symbol).Set(coin.MarketData.PriceChangePercentage7d)
+	prometheusConfig.gaugeVectors["change14d"].WithLabelValues(coin.Symbol).Set(coin.MarketData.PriceChangePercentage14d)
+	prometheusConfig.gaugeVectors["change30d"].WithLabelValues(coin.Symbol).Set(coin.MarketData.PriceChangePercentage30d)
+	prometheusConfig.gaugeVectors["change60d"].WithLabelValues(coin.Symbol).Set(coin.MarketData.PriceChangePercentage60d)
+	prometheusConfig.gaugeVectors["change200d"].WithLabelValues(coin.Symbol).Set(coin.MarketData.PriceChangePercentage200d)
+	prometheusConfig.gaugeVectors["marketCapChange24Relative"].WithLabelValues(coin.Symbol).Set(coin.MarketData.MarketCapChangePercentage24h)
+	prometheusConfig.gaugeVectors["marketCap"].WithLabelValues(coin.Symbol).Set(coin.MarketData.MarketCap[rConf.currency])
+	prometheusConfig.gaugeVectors["high24"].WithLabelValues(coin.Symbol).Set(coin.MarketData.High24[rConf.currency])
+	prometheusConfig.gaugeVectors["low24"].WithLabelValues(coin.Symbol).Set(coin.MarketData.Low24[rConf.currency])
 
 }
