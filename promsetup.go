@@ -23,6 +23,7 @@ type prometheusConfigStruct struct {
 	currentPrice              *prometheus.GaugeVec
 	ath                       *prometheus.GaugeVec
 	athRelative               *prometheus.GaugeVec
+	change1h                  *prometheus.GaugeVec
 	change24h                 *prometheus.GaugeVec
 	change7d                  *prometheus.GaugeVec
 	change14d                 *prometheus.GaugeVec
@@ -39,6 +40,7 @@ var prometheusConfig = prometheusConfigStruct{
 	currentPrice:              nil,
 	ath:                       nil,
 	athRelative:               nil,
+	change1h:                  nil,
 	change24h:                 nil,
 	change7d:                  nil,
 	change14d:                 nil,
@@ -69,6 +71,10 @@ func setupGauges(ctx context.Context) {
 		Namespace: "coin_gecko",
 		Name:      "ath_relative",
 		Help:      fmt.Sprintf("alltime high relative")}, []string{"symbol"})
+	prometheusConfig.change1h = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: "coin_gecko",
+		Name:      "change1h",
+		Help:      fmt.Sprintf("change1h")}, []string{"symbol"})
 	prometheusConfig.change24h = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: "coin_gecko",
 		Name:      "change24h",
@@ -114,6 +120,7 @@ func setupGauges(ctx context.Context) {
 	prometheusConfig.registry.MustRegister(prometheusConfig.currentPrice)
 	prometheusConfig.registry.MustRegister(prometheusConfig.ath)
 	prometheusConfig.registry.MustRegister(prometheusConfig.athRelative)
+	prometheusConfig.registry.MustRegister(prometheusConfig.change1h)
 	prometheusConfig.registry.MustRegister(prometheusConfig.change24h)
 	prometheusConfig.registry.MustRegister(prometheusConfig.change7d)
 	prometheusConfig.registry.MustRegister(prometheusConfig.change14d)
